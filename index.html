@@ -1,0 +1,156 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Intersection Hazard Map</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    #map { height: 90vh; width: 100%; }
+    .legend, .filters, .lang-toggle {
+      background: white;
+      padding: 10px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      margin: 10px;
+    }
+    .legend { position: absolute; bottom: 20px; left: 10px; z-index: 1000; }
+    .filters { position: absolute; top: 10px; right: 10px; z-index: 1000; }
+    .lang-toggle { position: absolute; top: 10px; left: 10px; z-index: 1000; cursor: pointer; }
+    .legend i {
+      width: 18px;
+      height: 18px;
+      float: left;
+      margin-right: 8px;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="lang-toggle">
+    <button onclick="setLanguage('en')">🇬🇧 English</button>
+    <button onclick="setLanguage('fr')">🇫🇷 Français</button>
+  </div>
+
+  <div class="filters">
+    <strong id="filter-label">Filter by Hazard Level:</strong><br>
+    <label><input type="checkbox" value="Safe" checked> Safe</label><br>
+    <label><input type="checkbox" value="Acceptable" checked> Acceptable</label><br>
+    <label><input type="checkbox" value="Somewhat hazardous" checked> Somewhat Hazardous</label><br>
+    <label><input type="checkbox" value="Hazardous" checked> Hazardous</label><br>
+    <label><input type="checkbox" value="Very hazardous" checked> Very Hazardous</label>
+  </div>
+
+  <div id="map"></div>
+
+  <div class="legend">
+    <strong>Legend</strong><br>
+    <i style="background: blue"></i> Safe<br>
+    <i style="background: green"></i> Acceptable<br>
+    <i style="background: orange"></i> Somewhat Hazardous<br>
+    <i style="background: red"></i> Hazardous<br>
+    <i style="background: darkred"></i> Very Hazardous<br>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    var map = L.map('map').setView([45.5017, -73.5673], 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: 'Map data © <a href="https://openstreetmap.org">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    let language = 'en';
+
+    function setLanguage(lang) {
+      language = lang;
+      loadData(currentLevels);
+    }
+
+    function getColor(level) {
+      switch (level) {
+        case 'Safe': return 'blue';
+        case 'Acceptable': return 'green';
+        case 'Somewhat hazardous': return 'orange';
+        case 'Hazardous': return 'red';
+        case 'Very hazardous': return 'darkred';
+        default: return 'gray';
+      }
+    }
+
+    function style(feature) {
+      return {
+        color: getColor(feature.properties["Hazard level"]),
+        weight: 4,
+        opacity: 0.9
+      };
+    }
+
+    function onEachFeature(feature, layer) {
+      const p = feature.properties;
+      let popup = "";
+      if (language === 'en') {
+        popup = `
+          <b>Intersection Design:</b> ${p["Intersection design"]}<br>
+          <b>Traffic Calming:</b> ${p["Traffic calming"]}<br>
+          <b>POI:</b> ${p["POI"]}<br>
+          <b>Traffic Control:</b> ${p["Traffic control"]}<br>
+          <b>Visibility:</b> ${p["Visibility"]}<br>
+          <b>Bike Path Design:</b> ${p["Bike path design"]}<br>
+          <b>Segment Hazard Level:</b> ${p["Segment hazard level"]}<br>
+          <b>Hazard Score:</b> ${p["Hazard score"]}<br>
+          <b>Hazard Level:</b> ${p["Hazard level"]}
+        `;
+      } else {
+        popup = `
+          <b>Conception de l’intersection :</b> ${p["Intersection design"]}<br>
+          <b>Modération de la circulation :</b> ${p["Traffic calming"]}<br>
+          <b>Type de bâtiment non résidentiel :</b> ${p["POI"]}<br>
+          <b>Contrôle de circulation :</b> ${p["Traffic control"]}<br>
+          <b>Visibilité :</b> ${p["Visibility"]}<br>
+          <b>Aménagement de la piste cyclable :</b> ${p["Bike path design"]}<br>
+          <b>Niveau de danger du segment :</b> ${p["Segment hazard level"]}<br>
+          <b>Score de danger :</b> ${p["Hazard score"]}<br>
+          <b>Niveau de danger :</b> ${p["Hazard level"]}
+        `;
+      }
+      layer.bindPopup(popup);
+    }
+
+    let geojsonLayer;
+    let currentLevels = ['Safe', 'Acceptable', 'Somewhat hazardous', 'Hazardous', 'Very hazardous'];
+
+    function loadData(levels) {
+      currentLevels = levels;
+      if (geojsonLayer) geojsonLayer.remove();
+      fetch('intersection_hazard_reprojected.geojson')
+        .then(res => res.json())
+        .then(data => {
+          console.log("Sample feature properties:", data.features[0]?.properties); // Debugging line
+          const filtered = {
+            ...data,
+            features: data.features.filter(f =>
+              levels.includes(f.properties["Hazard level"])
+            )
+          };
+          geojsonLayer = L.geoJSON(filtered, {
+            style: style,
+            onEachFeature: onEachFeature
+          }).addTo(map);
+        })
+        .catch(err => console.error("Error loading GeoJSON:", err));
+    }
+
+    loadData(currentLevels);
+
+    document.querySelectorAll('.filters input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const selected = Array.from(document.querySelectorAll('.filters input[type="checkbox"]:checked')).map(cb => cb.value);
+        loadData(selected);
+      });
+    });
+  </script>
+</body>
+</html>

@@ -125,7 +125,7 @@
     function loadData(levels) {
       currentLevels = levels;
       if (geojsonLayer) geojsonLayer.remove();
-      fetch('intersection_hazard_interpreted.geojson')
+fetch('intersection_hazard_reprojected.geojson')
         .then(res => res.json())
         .then(data => {
           const filtered = {

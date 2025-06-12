@@ -1,0 +1,125 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Intersection Hazard Map</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    #map { height: 90vh; width: 100%; }
+    .legend, .filters {
+      background: white;
+      padding: 10px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      margin: 10px;
+    }
+    .legend { position: absolute; bottom: 20px; left: 10px; z-index: 1000; }
+    .filters { position: absolute; top: 10px; right: 10px; z-index: 1000; }
+    .legend i {
+      width: 18px;
+      height: 18px;
+      float: left;
+      margin-right: 8px;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="filters">
+    <strong>Filter by Hazard Level:</strong><br>
+    <label><input type="checkbox" value="Safe" checked> Safe</label><br>
+    <label><input type="checkbox" value="Acceptable" checked> Acceptable</label><br>
+    <label><input type="checkbox" value="Somewhat hazardous" checked> Somewhat Hazardous</label><br>
+    <label><input type="checkbox" value="Hazardous" checked> Hazardous</label><br>
+    <label><input type="checkbox" value="Very hazardous" checked> Very Hazardous</label>
+  </div>
+
+  <div id="map"></div>
+
+  <div class="legend">
+    <strong>Legend</strong><br>
+    <i style="background: blue"></i> Safe<br>
+    <i style="background: green"></i> Acceptable<br>
+    <i style="background: orange"></i> Somewhat Hazardous<br>
+    <i style="background: red"></i> Hazardous<br>
+    <i style="background: darkred"></i> Very Hazardous<br>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    var map = L.map('map').setView([45.5017, -73.5673], 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: 'Map data © <a href="https://openstreetmap.org">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    function getColor(level) {
+      switch (level) {
+        case 'Safe': return 'blue';
+        case 'Acceptable': return 'green';
+        case 'Somewhat hazardous': return 'orange';
+        case 'Hazardous': return 'red';
+        case 'Very hazardous': return 'darkred';
+        default: return 'gray';
+      }
+    }
+
+    function onEachFeature(feature, layer) {
+      const p = feature.properties;
+      const popup = `
+        <b>Hazard Level:</b> ${p["Hazard level"]}<br>
+        <b>Intersection Design:</b> ${p["Intersection design"]}<br>
+        <b>Traffic Calming:</b> ${p["Traffic calming"]}<br>
+        <b>POI:</b> ${p["POI"]}<br>
+        <b>Traffic Control:</b> ${p["Traffic control"]}<br>
+        <b>Visibility:</b> ${p["Visibility"]}<br>
+        <b>Bike Path Design:</b> ${p["Bike path design"]}<br>
+        <b>Segment Hazard Level:</b> ${p["Segment hazard level"]}<br>
+        <b>Hazard Score:</b> ${p["Hazard score"]}
+      `;
+      layer.bindPopup(popup);
+    }
+
+    let geojsonLayer;
+    function loadData(levels) {
+      if (geojsonLayer) geojsonLayer.remove();
+      fetch('intersection_hazard_corrected.geojson')
+        .then(res => res.json())
+        .then(data => {
+          const filtered = {
+            ...data,
+            features: data.features.filter(f =>
+              levels.includes(f.properties["Hazard level"])
+            )
+          };
+          geojsonLayer = L.geoJSON(filtered, {
+            pointToLayer: function (feature, latlng) {
+              return L.circleMarker(latlng, {
+                radius: 6,
+                fillColor: getColor(feature.properties["Hazard level"]),
+                color: "#000",
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.8
+              });
+            },
+            onEachFeature: onEachFeature
+          }).addTo(map);
+        });
+    }
+
+    const defaultLevels = ['Safe', 'Acceptable', 'Somewhat hazardous', 'Hazardous', 'Very hazardous'];
+    loadData(defaultLevels);
+
+    document.querySelectorAll('.filters input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const selected = Array.from(document.querySelectorAll('.filters input[type="checkbox"]:checked')).map(cb => cb.value);
+        loadData(selected);
+      });
+    });
+  </script>
+</body>
+</html>
